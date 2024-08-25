@@ -133,6 +133,11 @@ public class EntityPlugin : Plugin
         }
 
         var entityInfo = Bot.Data.Entities.ById(packet.EntityType)!;
+        // player spawn is handled by the player plugin
+        if (entityInfo.Type == EntityType.Player)
+        {
+            return Task.CompletedTask;
+        }
 
         var newEntity = new Entity(
             entityInfo, packet.EntityId, new MutableVector3(packet.X, packet.Y, packet.Z),

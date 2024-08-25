@@ -43,6 +43,10 @@ public class PlayerPlugin : Plugin
         OnPacketAfterInitialization<CombatDeathPacket>(HandleCombatDeathPacket);
         OnPacketAfterInitialization<RespawnPacket>(HandleRespawnPacket);
         OnPacketAfterInitialization<SpawnPlayerPacket>(HandleSpawnPlayer);
+        if (bot.Data.Version.Protocol >= ProtocolVersion.V_1_20_2)
+        {
+            OnPacketAfterInitialization<SpawnEntityPacket>(HandleSpawnEntityPacket);
+        }
         OnPacketAfterInitialization<PlayerInfoUpdatePacket>(HandlePlayerInfoUpdate);
         OnPacketAfterInitialization<PlayerInfoRemovePacket>(HandlePlayerInfoRemove);
         OnPacketAfterInitialization<GameEventPacket>(HandleGameEvent);
@@ -193,6 +197,7 @@ public class PlayerPlugin : Plugin
         Logger.Info(
             "Initialized Bot Entity: Position=({Position}), GameMode={GameMode}, Health={Health}, Dimension={DimensionName} ({Dimension}).", Entity!.Position, Self.GameMode, Health, DimensionName, Self!.Dimension);
 
+        Players.Add(Self.Uuid, Self);
         PlayerMap.TryAdd(entity.ServerId, Self);
 
         if (Health > 0)
@@ -306,16 +311,27 @@ public class PlayerPlugin : Plugin
         return Task.CompletedTask;
     }
 
+    private Task AddPlayer(Uuid uuid, Entity entity)
+    {
+        if (!Players.TryGetValue(uuid, out var player))
+        {
+            Logger.Warn($"Received SpawnPlayer packet for unknown player: {uuid}");
+            return Task.CompletedTask;
+        }
+
+        player.Entity = entity;
+
+        entities!.AddEntity(entity);
+        PlayerMap.TryAdd(player.Entity!.ServerId, player);
+
+        OnPlayerLoaded.Dispatch(Bot, player);
+        return Task.CompletedTask;
+    }
+
     private Task HandleSpawnPlayer(SpawnPlayerPacket packet)
     {
         if (!IsEnabled)
         {
-            return Task.CompletedTask;
-        }
-
-        if (!Players.TryGetValue(packet.PlayerUuid, out var player))
-        {
-            Logger.Warn($"Received SpawnPlayer packet for unknown player: {packet.PlayerUuid}");
             return Task.CompletedTask;
         }
 
@@ -331,13 +347,35 @@ public class PlayerPlugin : Plugin
             new MutableVector3(0, 0, 0),
             true,
             new());
-        player.Entity = entity;
+        return AddPlayer(packet.PlayerUuid, entity);
+    }
 
-        entities!.AddEntity(entity);
-        PlayerMap.TryAdd(player.Entity!.ServerId, player);
+    private Task HandleSpawnEntityPacket(SpawnEntityPacket packet)
+    {
+        if (!IsEnabled)
+        {
+            return Task.CompletedTask;
+        }
 
-        OnPlayerLoaded.Dispatch(Bot, player);
-        return Task.CompletedTask;
+        // same code as in EntityPlugin.HandleSpawnEntityPacket but handles only players
+        var entityInfo = Bot.Data.Entities.ById(packet.EntityType)!;
+        if (entityInfo.Type != EntityType.Player)
+        {
+            return Task.CompletedTask;
+        }
+
+        var entity = new Entity(
+            entityInfo, packet.EntityId, new MutableVector3(packet.X, packet.Y, packet.Z),
+            packet.Pitch,
+            packet.Yaw,
+            new MutableVector3(
+                NetUtils.ConvertToVelocity(packet.VelocityX),
+                NetUtils.ConvertToVelocity(packet.VelocityY),
+                NetUtils.ConvertToVelocity(packet.VelocityZ)),
+            true,
+            new());
+
+        return AddPlayer(packet.ObjectUuid, entity);
     }
 
     private Task HandlePlayerInfoUpdate(PlayerInfoUpdatePacket packet)
