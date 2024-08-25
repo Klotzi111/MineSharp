@@ -56,7 +56,7 @@ public class Session
     /// <returns></returns>
     public static Session OfflineSession(string username)
     {
-        return new(username, Guid.NewGuid(), "", "", false);
+        return new(username, Uuid.CreateFromName($"OfflinePlayer:{username}"), "", "", false);
     }
 
     /// <inheritdoc />

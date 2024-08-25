@@ -1,5 +1,7 @@
 ﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace MineSharp.Core.Common;
 
@@ -224,5 +226,37 @@ public readonly struct Uuid : IEquatable<Uuid>
     {
         var hi = 1L << (digits * 4);
         return $"{hi | (val & (hi - 1)):X}".Substring(1);
+    }
+
+    /// <summary>
+    /// Creates a Version 3 (name-based) UUID using the specified <paramref name="name"/> and <paramref name="encoding"/>.
+    /// If no encoding is specified, UTF-8 encoding is used.
+    /// </summary>
+    /// <seealso cref="CreateFromName(ReadOnlySpan{byte})"/>
+    public static Uuid CreateFromName(ReadOnlySpan<char> name, Encoding? encoding = null)
+    {
+        encoding ??= Encoding.UTF8;
+
+        Span<byte> bytes = stackalloc byte[encoding.GetByteCount(name)];
+        encoding.GetBytes(name, bytes);
+        return CreateFromName(bytes);
+    }
+
+    /// <summary>
+    /// Creates a Version 3 (name-based) UUID using the specified name given as bytes.
+    /// </summary>
+    /// <seealso cref="CreateFromName(ReadOnlySpan{char}, Encoding?)"/>
+    public static Uuid CreateFromName(ReadOnlySpan<byte> name)
+    {
+        using var md5 = MD5.Create();
+        Span<byte> hash = stackalloc byte[16];
+        md5.TryComputeHash(name, hash, out _);
+
+        // Set the version to 3 (name-based)
+        hash[6] = (byte)((hash[6] & 0x0F) | 0x30);
+        // Set the variant to RFC 4122
+        hash[8] = (byte)((hash[8] & 0x3F) | 0x80);
+
+        return new Uuid(hash);
     }
 }
