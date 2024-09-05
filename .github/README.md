@@ -40,6 +40,9 @@ See [MineSharp.Bot](../MineSharp.Bot/README.md) for more information about creat
 using MineSharp.Bot;
 using MineSharp.Bot.Plugins;
 
+// this line is required because Humanizer has incomplete culture support. (See: https://github.com/Humanizr/Humanizer/issues/1521)
+Thread.CurrentThread.CurrentCulture = new CultureInfo("en-US");
+
 MineSharpBot bot = await new BotBuilder()
     .Host("localhost")
     .OfflineSession("MineSharpBot")
